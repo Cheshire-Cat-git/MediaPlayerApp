@@ -7,6 +7,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.viewModels
 import androidx.navigation.fragment.findNavController
 import com.example.mediaplayerapp.databinding.FragmentMainBinding
 
@@ -14,6 +15,10 @@ class MainFragment : Fragment() {
 
     private var _binding: FragmentMainBinding? = null
     private val binding get() = _binding!!
+
+    private val viewModel: MainViewModel by viewModels {
+        ViewModelFactory.getInstance(requireContext())
+    }
 
     private var selectedType: String? = null
 
@@ -23,11 +28,16 @@ class MainFragment : Fragment() {
                 putString("uri", it.toString())
             }
             if (selectedType == "audio") {
-                findNavController().navigate(R.id.audioPlayerFragment, bundle)
+                findNavController().navigate(R.id.action_mainFragment_to_audioPlayerFragment, bundle)
             } else if (selectedType == "video") {
-                findNavController().navigate(R.id.videoPlayerFragment, bundle)
+                findNavController().navigate(R.id.action_mainFragment_to_videoPlayerFragment, bundle)
             }
         }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        selectedType = savedInstanceState?.getString("selectedType")
     }
 
     override fun onCreateView(
@@ -41,6 +51,16 @@ class MainFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+
+        viewModel.isLoggedIn.observe(viewLifecycleOwner) { loggedIn ->
+            if (!loggedIn) {
+                if (findNavController().currentDestination?.id == R.id.mainFragment) {
+                    findNavController().navigate(R.id.loginFragment)
+                }
+            }
+        }
+
+        viewModel.checkAuthStatus()
 
         binding.btnAudio.setOnClickListener {
             selectedType = "audio"
@@ -56,11 +76,6 @@ class MainFragment : Fragment() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putString("selectedType", selectedType)
-    }
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        selectedType = savedInstanceState?.getString("selectedType")
     }
 
     override fun onDestroyView() {

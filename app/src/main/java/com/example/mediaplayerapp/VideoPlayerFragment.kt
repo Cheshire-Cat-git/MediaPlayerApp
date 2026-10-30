@@ -9,12 +9,17 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.SeekBar
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.viewModels
 import com.example.mediaplayerapp.databinding.FragmentVideoPlayerBinding
 
 class VideoPlayerFragment : Fragment() {
 
     private var _binding: FragmentVideoPlayerBinding? = null
     private val binding get() = _binding!!
+
+    private val viewModel: VideoPlayerViewModel by viewModels {
+        ViewModelFactory.getInstance(requireContext())
+    }
 
     private var currentPosition: Int = 0
     private var isPlayingState: Boolean = true
@@ -32,6 +37,9 @@ class VideoPlayerFragment : Fragment() {
         } else {
             uriString = arguments?.getString("uri")
         }
+        viewModel.setUriString(uriString)
+        viewModel.setPlaying(isPlayingState)
+        viewModel.updatePosition(currentPosition)
     }
 
     override fun onCreateView(
@@ -46,7 +54,13 @@ class VideoPlayerFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        binding.btnPlay.text = if (isPlayingState) "Pause" else "Play"
+        viewModel.isPlaying.observe(viewLifecycleOwner) { playing ->
+            binding.btnPlay.text = if (playing) "Pause" else "Play"
+        }
+
+        viewModel.timerText.observe(viewLifecycleOwner) { timerText ->
+            binding.tvVideoTime.text = timerText
+        }
 
         uriString?.let { uriStr ->
             val uri = Uri.parse(uriStr)
@@ -56,27 +70,28 @@ class VideoPlayerFragment : Fragment() {
                 val duration = mp.duration
                 if (duration > 0) {
                     binding.seekBarVideo.max = duration
+                    viewModel.setDuration(duration)
                 }
                 if (currentPosition > 0) {
                     binding.videoView.seekTo(currentPosition)
                 }
-                updateTimeText(currentPosition, duration)
+                viewModel.updatePosition(currentPosition)
 
                 if (isPlayingState) {
                     binding.videoView.start()
-                    binding.btnPlay.text = "Pause"
+                    viewModel.setPlaying(true)
                     startProgressUpdate()
                 } else {
-                    binding.btnPlay.text = "Play"
+                    viewModel.setPlaying(false)
                 }
             }
 
             binding.videoView.setOnCompletionListener {
                 isPlayingState = false
-                binding.btnPlay.text = "Play"
+                viewModel.setPlaying(false)
                 val duration = binding.videoView.duration
                 binding.seekBarVideo.progress = duration
-                updateTimeText(duration, duration)
+                viewModel.updatePosition(duration)
                 stopProgressUpdate()
             }
         }
@@ -86,12 +101,13 @@ class VideoPlayerFragment : Fragment() {
                 binding.videoView.pause()
                 isPlayingState = false
                 currentPosition = binding.videoView.currentPosition
-                binding.btnPlay.text = "Play"
+                viewModel.setPlaying(false)
+                viewModel.updatePosition(currentPosition)
                 stopProgressUpdate()
             } else {
                 binding.videoView.start()
                 isPlayingState = true
-                binding.btnPlay.text = "Pause"
+                viewModel.setPlaying(true)
                 startProgressUpdate()
             }
         }
@@ -101,7 +117,7 @@ class VideoPlayerFragment : Fragment() {
                 if (fromUser) {
                     binding.videoView.seekTo(progress)
                     currentPosition = progress
-                    updateTimeText(progress, binding.videoView.duration)
+                    viewModel.updatePosition(progress)
                 }
             }
 
@@ -119,9 +135,10 @@ class VideoPlayerFragment : Fragment() {
                     val dur = binding.videoView.duration
                     if (dur > 0) {
                         binding.seekBarVideo.max = dur
+                        viewModel.setDuration(dur)
                     }
                     binding.seekBarVideo.progress = cur
-                    updateTimeText(cur, dur)
+                    viewModel.updatePosition(cur)
                     handler.postDelayed(this, 500)
                 }
             }
@@ -132,14 +149,6 @@ class VideoPlayerFragment : Fragment() {
     private fun stopProgressUpdate() {
         updateRunnable?.let { handler.removeCallbacks(it) }
         updateRunnable = null
-    }
-
-    private fun updateTimeText(currentMs: Int, totalMs: Int) {
-        val curSec = (currentMs.coerceAtLeast(0) / 1000) % 60
-        val curMin = (currentMs.coerceAtLeast(0) / 1000) / 60
-        val totSec = (totalMs.coerceAtLeast(0) / 1000) % 60
-        val totMin = (totalMs.coerceAtLeast(0) / 1000) / 60
-        binding.tvVideoTime.text = String.format("%02d:%02d / %02d:%02d", curMin, curSec, totMin, totSec)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

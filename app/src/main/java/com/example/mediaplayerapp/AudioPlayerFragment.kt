@@ -7,12 +7,17 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.viewModels
 import com.example.mediaplayerapp.databinding.FragmentAudioPlayerBinding
 
 class AudioPlayerFragment : Fragment() {
 
     private var _binding: FragmentAudioPlayerBinding? = null
     private val binding get() = _binding!!
+
+    private val viewModel: AudioPlayerViewModel by viewModels {
+        ViewModelFactory.getInstance(requireContext())
+    }
 
     private var mediaPlayer: MediaPlayer? = null
     private var currentPosition: Int = 0
@@ -28,6 +33,9 @@ class AudioPlayerFragment : Fragment() {
         } else {
             uriString = arguments?.getString("uri")
         }
+        viewModel.setFilePath(uriString)
+        viewModel.setPlaying(isPlayingState)
+        viewModel.updatePosition(currentPosition)
     }
 
     override fun onCreateView(
@@ -42,7 +50,13 @@ class AudioPlayerFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        binding.tvFilePath.text = uriString ?: ""
+        viewModel.filePath.observe(viewLifecycleOwner) { path ->
+            binding.tvFilePath.text = path
+        }
+
+        viewModel.isPlaying.observe(viewLifecycleOwner) { playing ->
+            binding.btnPlayPause.text = if (playing) "Pause" else "Play"
+        }
 
         uriString?.let { uriStr ->
             setupMediaPlayer(Uri.parse(uriStr))
@@ -54,11 +68,12 @@ class AudioPlayerFragment : Fragment() {
                     player.pause()
                     this@AudioPlayerFragment.currentPosition = player.currentPosition
                     isPlayingState = false
-                    binding.btnPlayPause.text = "Play"
+                    viewModel.setPlaying(false)
+                    viewModel.updatePosition(player.currentPosition)
                 } else {
                     player.start()
                     isPlayingState = true
-                    binding.btnPlayPause.text = "Pause"
+                    viewModel.setPlaying(true)
                 }
             }
         }
@@ -74,15 +89,16 @@ class AudioPlayerFragment : Fragment() {
                     }
                     if (isPlayingState) {
                         player.start()
-                        binding.btnPlayPause.text = "Pause"
+                        viewModel.setPlaying(true)
                     } else {
-                        binding.btnPlayPause.text = "Play"
+                        viewModel.setPlaying(false)
                     }
                 }
                 setOnCompletionListener {
                     isPlayingState = false
                     this@AudioPlayerFragment.currentPosition = 0
-                    binding.btnPlayPause.text = "Play"
+                    viewModel.setPlaying(false)
+                    viewModel.updatePosition(0)
                 }
                 prepareAsync()
             } catch (e: Exception) {
